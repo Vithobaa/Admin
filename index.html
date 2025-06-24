@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Panel</title>
+
+  <!-- Bootstrap -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f4f4f4;
+      padding: 60px 0;
+    }
+    .admin-container {
+      max-width: 1000px;
+      margin: auto;
+      background: #fff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.07);
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+    .btn-custom {
+      background-color: #ff416c;
+      color: #fff;
+    }
+    .btn-outline-custom {
+      border: 2px solid #ff416c;
+      color: #ff416c;
+    }
+    .btn-outline-custom:hover {
+      background-color: #ff416c;
+      color: #fff;
+    }
+    .card-custom {
+      border: 1px solid #eee;
+      border-radius: 12px;
+      padding: 20px;
+      background: #fefefe;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.03);
+    }
+    .project-grid, .review-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    textarea.form-control {
+      resize: vertical;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container admin-container">
+  <div id="app"></div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+  import {
+    getFirestore, doc, setDoc, getDoc, addDoc, getDocs, deleteDoc, collection
+  } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+  } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAQFXl-yPFaia5ztMOkphxeuDRj6XKhi8g",
+    authDomain: "bhavana-portfolio-df129.firebaseapp.com",
+    projectId: "bhavana-portfolio-df129",
+    storageBucket: "bhavana-portfolio-df129.appspot.com",
+    messagingSenderId: "196730219110",
+    appId: "1:196730219110:web:9e1f89dc94325157249ba7",
+    measurementId: "G-DPJ9FES7V9"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+  const appDiv = document.getElementById("app");
+
+  function showLogin() {
+    appDiv.innerHTML = `
+      <div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+        <div class="w-100" style="max-width: 400px;">
+          <h2 class="text-center mb-4">🔐 Admin Login</h2>
+          <div class="mb-3"><input type="email" id="email" class="form-control" placeholder="Email"></div>
+          <div class="mb-3"><input type="password" id="password" class="form-control" placeholder="Password"></div>
+          <button onclick="login()" class="btn btn-custom w-100">Login</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function showAdmin() {
+    appDiv.innerHTML = `
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📋 Admin Panel</h2>
+        <button onclick="logout()" class="btn btn-outline-custom">Logout</button>
+      </div>
+
+      <div class="mb-5">
+        <h4 class="section-title">📝 Update About</h4>
+        <textarea id="description" class="form-control mb-2" rows="3" placeholder="Short Description"></textarea>
+        <button onclick="updateAbout()" class="btn btn-custom">Save About</button>
+      </div>
+
+      <div class="mb-5">
+        <h4 class="section-title">📌 Add Project</h4>
+        <div class="row g-2 mb-2">
+          <div class="col-md-6"><input type="text" id="title" class="form-control" placeholder="Project Title"></div>
+          <div class="col-md-6"><input type="text" id="tags" class="form-control" placeholder="Comma-separated tags"></div>
+        </div>
+        <textarea id="desc" class="form-control mb-2" placeholder="Description"></textarea>
+        <input type="text" id="link" class="form-control mb-2" placeholder="Project Link">
+        <button onclick="addProject()" class="btn btn-custom">Add Project</button>
+      </div>
+
+      <div class="mb-5">
+        <h4 class="section-title">📂 All Projects</h4>
+        <div id="project-list" class="project-grid"></div>
+      </div>
+
+      <div class="mb-5">
+        <h4 class="section-title">📝 Add Review</h4>
+        <input type="text" id="reviewerName" class="form-control mb-2" placeholder="Reviewer Name">
+        <textarea id="reviewMessage" class="form-control mb-2" placeholder="Review Message"></textarea>
+        <select id="reviewStars" class="form-select mb-2">
+          <option value="5">⭐⭐⭐⭐⭐</option>
+          <option value="4">⭐⭐⭐⭐</option>
+          <option value="3">⭐⭐⭐</option>
+          <option value="2">⭐⭐</option>
+          <option value="1">⭐</option>
+        </select>
+        <button onclick="addReview()" class="btn btn-custom">Add Review</button>
+      </div>
+
+      <div>
+        <h4 class="section-title">🗂 All Reviews</h4>
+        <div id="review-list" class="review-grid"></div>
+      </div>
+    `;
+
+    loadAbout();
+    loadProjects();
+    loadReviews();
+  }
+
+  window.login = async () => {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      alert("Login failed: " + err.message);
+    }
+  };
+
+  window.logout = async () => {
+    await signOut(auth);
+    location.reload();
+  };
+
+  async function loadAbout() {
+    const docSnap = await getDoc(doc(db, "site", "about"));
+    if (docSnap.exists()) {
+      document.getElementById("description").value = docSnap.data().description || "";
+    }
+  }
+
+  window.updateAbout = async () => {
+    const description = document.getElementById("description").value;
+    await setDoc(doc(db, "site", "about"), { description });
+    alert("About updated!");
+  };
+
+  window.addProject = async () => {
+    const title = document.getElementById("title").value;
+    const description = document.getElementById("desc").value;
+    const tags = document.getElementById("tags").value.split(",").map(t => t.trim());
+    const link = document.getElementById("link").value;
+    await addDoc(collection(db, "projects"), { title, description, tags, link });
+    alert("Project added!");
+    loadProjects();
+  };
+
+  async function loadProjects() {
+    const querySnapshot = await getDocs(collection(db, "projects"));
+    const list = document.getElementById("project-list");
+    list.innerHTML = "";
+    querySnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "card-custom";
+      div.innerHTML = `
+        <h5>${data.title}</h5>
+        <p>${data.description}</p>
+        <small class="text-muted">${data.tags.join(", ")}</small><br>
+        <a href="${data.link}" target="_blank" class="btn btn-sm btn-outline-custom mt-2">View</a>
+        <button onclick="deleteProject('${docSnap.id}')" class="btn btn-sm btn-danger mt-2 ms-2">Delete</button>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  window.deleteProject = async (id) => {
+    if (confirm("Delete this project?")) {
+      await deleteDoc(doc(db, "projects", id));
+      loadProjects();
+    }
+  };
+
+  window.addReview = async () => {
+    const name = document.getElementById("reviewerName").value;
+    const message = document.getElementById("reviewMessage").value;
+    const stars = parseInt(document.getElementById("reviewStars").value);
+    await addDoc(collection(db, "reviews"), { name, message, stars });
+    alert("Review added!");
+    loadReviews();
+  };
+
+  async function loadReviews() {
+    const querySnapshot = await getDocs(collection(db, "reviews"));
+    const list = document.getElementById("review-list");
+    list.innerHTML = "";
+    querySnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "card-custom mb-3";
+      div.innerHTML = `
+        <strong>${data.name}</strong><br>
+        <em>${data.message}</em><br>
+        <span>${"★".repeat(data.stars || 0)}${"☆".repeat(5 - (data.stars || 0))}</span><br>
+        <button onclick="deleteReview('${docSnap.id}')" class="btn btn-sm btn-danger mt-2">Delete</button>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  window.deleteReview = async (id) => {
+    if (confirm("Delete this review?")) {
+      await deleteDoc(doc(db, "reviews", id));
+      loadReviews();
+    }
+  };
+
+  onAuthStateChanged(auth, user => {
+    if (user) showAdmin();
+    else showLogin();
+  });
+</script>
+
+</body>
+</html>
